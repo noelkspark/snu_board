@@ -1,5 +1,8 @@
 import axios from "axios";
 import cheerio from "cheerio";
+import { isJSDocNamepathType } from "typescript";
+
+/* variables */
 
 /* industrial engineering */
 const ie_main_url: string = "http://ie.snu.ac.kr";
@@ -151,6 +154,7 @@ async function eng_scholship_crawl_info(
           date: $date.text(),
           content: $content.text(),
         };
+        final_list[i].name = "kiseo";
         //ie_main_notice_urlTitle.push($title.text()); //save in <list : ie_main_notice_urlTitle>
         //ie_main_notice_urlDate.push($date.text()); //save in <list : ie_main_notice_urlDate>
         //ie_main_notice_urlContent.push($content.text()); //save in <list : ie_main_notice_urlContent>
@@ -170,6 +174,92 @@ async function debug_print() {
 }
 */
 
+/////////////////////////////////test for combining crawl func
+
+async function get_element_urls_any(
+  url: string,
+  url_list: string[],
+  final_list
+) {
+  //////////get urls from some boards
+  const AxiosInst = axios.create();
+  await AxiosInst.get(url)
+    .then((response) => {
+      const html = response.data;
+      const $ = cheerio.load(html);
+      const $board_element = $("tbody > tr");
+      $board_element.each((index, value) => {
+        const $link_and_title = $(value).find(
+          "td.views-field-title > a, td.views-field-title-field > a"
+        );
+        const $link = $link_and_title.attr("href");
+        url_list.push($link);
+        const $title = $link_and_title.text(); //get title
+
+        const $date = $(value).find("td.views-field-created").text(); //get date
+        final_list[index] = {
+          title: $title,
+          date: $date,
+        };
+      });
+    })
+    .catch(function (error) {
+      console.log("Error " + error.message);
+    });
+}
+
+async function crawl_info_any(
+  main_url: string,
+  board_url: string,
+  url_list: string[],
+  final_list
+) {
+  /////////////////////get info from crawled urls from <function : get_element_urls>
+  await get_element_urls_any(board_url, url_list, final_list); ////////title, date, and content
+  const len = url_list.length;
+
+  for (let i = 0; i < len; i++) {
+    const AxiosInst = axios.create();
+    await AxiosInst.get(main_url + url_list[i])
+      .then(async (response) => {
+        const html = response.data;
+        const $ = cheerio.load(html);
+        const $content = $("div.field-items > .field-item"); // get full content
+        final_list[i].content = $content.text();
+        //ie_main_notice_urlTitle.push($title.text()); //save in <list : ie_main_notice_urlTitle>
+        //ie_main_notice_urlDate.push($date.text()); //save in <list : ie_main_notice_urlDate>
+        //ie_main_notice_urlContent.push($content.text()); //save in <list : ie_main_notice_urlContent>
+        console.log(final_list);
+      })
+      .catch(function (error) {
+        console.log("Error " + error.message);
+      });
+  }
+}
+
+///
+
+crawl_info_any(
+  eng_main_url,
+  eng_scholship,
+  eng_scholshipURLs,
+  eng_scholshipList
+); // 장학알림 crawl
+
+/* 산업공학과 crawl done */
+
+/* 공학부 crawl */
+/*
+eng_notice_crawl_info(eng_main_url, eng_notice, eng_noticeURLs, eng_noticeList); // 공지사항 crawl
+
+eng_scholship_crawl_info(
+  eng_main_url,
+  eng_scholship,
+  eng_scholshipURLs,
+  eng_scholshipList
+); // 장학알림 crawl
+*/
+///////////////////////////////////////기존 따로 따로 crawl
 /* 산업공학과 crawl */
 /*
 ie_crawl_info(ie_main_url, ie_main_news, ie_main_newsURLs, ie_main_newsList); //학과 주요 뉴스 crawl
@@ -191,7 +281,7 @@ ie_crawl_info(
 /* 산업공학과 crawl done */
 
 /* 공학부 crawl */
-
+/*
 eng_notice_crawl_info(eng_main_url, eng_notice, eng_noticeURLs, eng_noticeList); // 공지사항 crawl
 
 eng_scholship_crawl_info(
@@ -200,6 +290,6 @@ eng_scholship_crawl_info(
   eng_scholshipURLs,
   eng_scholshipList
 ); // 장학알림 crawl
-
+*/
 //eng_crawl_info(eng_main_url, eng_recruit, eng_recruitURLs, eng_recruitList); //  취직광장 crawl --> 전부 사진임**
 /* 공학부 crawl done */
