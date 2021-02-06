@@ -1,8 +1,9 @@
 import axios from "axios";
 import cheerio from "cheerio";
-import { isJSDocNamepathType } from "typescript";
+import { convertToObject, isJSDocNamepathType } from "typescript";
 
 /* variables */
+const B_CNT = 7;
 
 /* industrial engineering */
 const ie_main_url: string = "http://ie.snu.ac.kr";
@@ -38,12 +39,27 @@ const eng_scholshipList = [];
 const eng_recruitURLs = [];
 const eng_recruitList = [];
 
+/* for all */
+const full_obj = [
+  [ie_main_url, ie_main_news, ie_main_newsURLs, ie_main_newsList],
+  [ie_main_url, ie_notice_UD, ie_notice_UDURLs, ie_notice_UDList],
+  [ie_main_url, ie_notice_GS, ie_notice_GSURLs, ie_notice_GSList],
+  [
+    ie_main_url,
+    ie_notice_recruit,
+    ie_notice_recruitURLs,
+    ie_notice_recruitList,
+  ],
+  [
+    ie_main_url,
+    ie_notice_scholship,
+    ie_notice_scholshipURLs,
+    ie_notice_scholshipList,
+  ],
+  [eng_main_url, eng_notice, eng_noticeURLs, eng_noticeList],
+  [eng_main_url, eng_scholship, eng_scholshipURLs, eng_scholshipList],
+];
 /*
-let ie_main_notice_urlList = [];
-let ie_main_notice_urlTitle = [];
-let ie_main_notice_urlDate = [];
-let ie_main_notice_urlContent = [];
-*/
 async function get_element_urls(url: string, url_list) {
   //////////get urls from some boards
   const AxiosInst = axios.create();
@@ -163,7 +179,7 @@ async function eng_scholship_crawl_info(
       .catch(console.error);
   }
 }
-/*
+
 async function debug_print() {
   await get_element_urls(ie_main_news,);
 
@@ -183,24 +199,43 @@ async function get_element_urls_any(
 ) {
   //////////get urls from some boards
   const AxiosInst = axios.create();
+  const cur_date = new Date();
+  const month_ago = new Date();
+  var idx = 0;
   await AxiosInst.get(url)
     .then((response) => {
       const html = response.data;
       const $ = cheerio.load(html);
       const $board_element = $("tbody > tr");
-      $board_element.each((index, value) => {
+      $board_element.each(async (index, value) => {
         const $link_and_title = $(value).find(
           "td.views-field-title > a, td.views-field-title-field > a"
         );
         const $link = $link_and_title.attr("href");
         url_list.push($link);
-        const $title = $link_and_title.text(); //get title
-
-        const $date = $(value).find("td.views-field-created").text(); //get date
-        final_list[index] = {
-          title: $title,
-          date: $date,
-        };
+        const $title = $link_and_title.text().trim(); //get title
+        const $date = $(value)
+          .find("td.views-field-created")
+          .text()
+          .trim()
+          .replace("-", ".")
+          .replace("-", "."); //get date
+        const date_filter = $date.split(".");
+        month_ago.setTime(cur_date.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const article_date = new Date(
+          parseInt(date_filter[0]),
+          parseInt(date_filter[1]) - 1,
+          parseInt(date_filter[2])
+        );
+        if (article_date.getTime() < month_ago.getTime()) {
+          console.log("today: " + month_ago + "popped date: " + article_date);
+          url_list.pop();
+        } else {
+          final_list[idx++] = {
+            title: $title,
+            date: $date,
+          };
+        }
       });
     })
     .catch(function (error) {
@@ -217,7 +252,7 @@ async function crawl_info_any(
   /////////////////////get info from crawled urls from <function : get_element_urls>
   await get_element_urls_any(board_url, url_list, final_list); ////////title, date, and content
   const len = url_list.length;
-
+  console.log(len);
   for (let i = 0; i < len; i++) {
     const AxiosInst = axios.create();
     await AxiosInst.get(main_url + url_list[i])
@@ -225,11 +260,12 @@ async function crawl_info_any(
         const html = response.data;
         const $ = cheerio.load(html);
         const $content = $("div.field-items > .field-item"); // get full content
-        final_list[i].content = $content.text();
+        final_list[i].content = $content.text().trim();
         //ie_main_notice_urlTitle.push($title.text()); //save in <list : ie_main_notice_urlTitle>
         //ie_main_notice_urlDate.push($date.text()); //save in <list : ie_main_notice_urlDate>
         //ie_main_notice_urlContent.push($content.text()); //save in <list : ie_main_notice_urlContent>
-        console.log(final_list);
+        //console.log(final_list);
+        console.log(final_list[i].date);
       })
       .catch(function (error) {
         console.log("Error " + error.message);
@@ -237,7 +273,38 @@ async function crawl_info_any(
   }
 }
 
+async function do_crawl(full_obj) {
+  for (let num = 0; num < B_CNT; num++) {
+    await crawl_info_any(
+      full_obj[num][0],
+      full_obj[num][1],
+      full_obj[num][2],
+      full_obj[num][3]
+    );
+  }
+}
+
+do_crawl(full_obj);
+
 ///
+/*
+crawl_info_any(ie_main_url, ie_main_news, ie_main_newsURLs, ie_main_newsList); //학과 주요 뉴스 crawl
+crawl_info_any(ie_main_url, ie_notice_UD, ie_notice_UDURLs, ie_notice_UDList); //학부 공지 사항 crawl
+crawl_info_any(ie_main_url, ie_notice_GS, ie_notice_GSURLs, ie_notice_GSList); //대학원 공지 사항 crawl
+crawl_info_any(
+  ie_main_url,
+  ie_notice_recruit,
+  ie_notice_recruitURLs,
+  ie_notice_recruitList
+); //취직 공지 사항 crawl
+crawl_info_any(
+  ie_main_url,
+  ie_notice_scholship,
+  ie_notice_scholshipURLs,
+  ie_notice_scholshipList
+); //장학 공지 사항 crawl
+
+crawl_info_any(eng_main_url, eng_notice, eng_noticeURLs, eng_noticeList); // 공지사항 crawl
 
 crawl_info_any(
   eng_main_url,
@@ -245,7 +312,7 @@ crawl_info_any(
   eng_scholshipURLs,
   eng_scholshipList
 ); // 장학알림 crawl
-
+*/
 /* 산업공학과 crawl done */
 
 /* 공학부 crawl */
